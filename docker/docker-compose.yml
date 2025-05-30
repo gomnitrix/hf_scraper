@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  app:
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017
+      - REDIS_URI=redis://:redis_password@redis:6379
+      - DGRAPH_URI=dgraph:9080
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - mongodb
+      - redis
+      - dgraph
+    volumes:
+      - ../:/app/
+    command: ["/bin/bash", "/app/start.sh"]
+    networks:
+      - scraper_network
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      # - mongodb_data:/data/db
+      - ./mongodb/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=huggingface_scraper
+    networks:
+      - scraper_network
+    command: mongod --auth
+
+  mongo-express:
+    image: mongo-express:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=password
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=password
+    depends_on:
+      - mongodb
+    networks:
+      - scraper_network
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      # - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - scraper_network
+
+  dgraph:
+    image: dgraph/standalone:latest
+    ports:
+      - "8080:8080"
+      - "9080:9080"
+    networks:
+      - scraper_network
+
+  ratel:
+    image: dgraph/ratel:latest
+    ports:
+      - "8000:8000"
+    networks:
+      - scraper_network
+
+networks:
+  scraper_network:
+    driver: bridge
+
+# volumes:
+#   mongodb_data:
+#   redis_data: 

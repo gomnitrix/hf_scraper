@@ -1,0 +1,123 @@
+# Define predicates
+id: string @index(exact) .
+name: string @index(term) @lang .
+description: string @index(fulltext) @lang .
+author: string @index(exact) .
+created_at: datetime @index(day) .
+last_modified: datetime @index(day) .
+downloads: int @index(int) .
+likes: int @index(int) .
+upvotes: int @index(int) .
+followers: int @index(int) .
+base_model_relation: string @index(exact) .
+arxiv_ids: [string] @index(exact) .
+
+# Define relationships
+author_of: [uid] @reverse .
+owner_of: [uid] @reverse .
+member_of: [uid] @reverse .
+contains: [uid] @reverse .
+trained_on: [uid] @reverse .
+based_on: [uid] @reverse .
+contribute_to: [uid] @reverse .
+source_of: [uid] @reverse .
+has_license: [uid] @reverse .
+has_tag: [uid] @reverse .
+in_library: [uid] @reverse .
+like: [uid] @reverse .
+follow: [uid] @reverse .
+upvote: [uid] @reverse .
+
+# Define types
+type Model {
+    name
+    created_at
+    last_modified
+    downloads
+    likes
+    base_model_relation
+
+    trained_on
+    based_on
+    has_license
+    has_tag
+    in_library
+
+    <~based_on>
+    <~contribute_to>
+    <~author_of>
+    <~contains>
+    <~like>
+}
+
+type Dataset {
+    name
+    created_at
+    last_modified
+    downloads
+    likes
+    arxiv_ids
+
+    source_of
+    has_license
+    has_tag
+    in_library
+
+    <~contains>
+    <~source_of>
+    <~author_of>
+    <~trained_on>
+    <~contribute_to>
+    <~like>
+}
+
+type Organization {
+    name
+    followers
+
+    author_of
+    owner_of
+    
+    <~follow>
+    <~member_of>
+}
+
+type Collection {
+    id
+    name
+    description
+    last_modified
+    upvotes
+
+    contains
+
+    <~upvote>
+    <~owner_of>
+} 
+
+type User {
+    name
+
+    author_of
+    owner_of
+    member_of
+    contribute_to
+    follow
+    like
+    upvote
+}
+
+type License {
+    name
+    <~has_license>
+}   
+
+type Tag {
+    name
+    <~has_tag>
+}
+
+type Library {
+    name
+    <~in_library>
+}
