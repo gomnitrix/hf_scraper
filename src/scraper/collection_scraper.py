@@ -99,8 +99,8 @@ class CollectionScraper(BaseScraper):
 
                 collections = self.api.list_collections(
                     item=item_id,
-                    sort="lastModified",
-                    limit=100
+                    sort="upvotes",
+                    limit=10
                 )
                 
                 for collection in collections:
@@ -136,13 +136,12 @@ class CollectionScraper(BaseScraper):
         await self.redis_client.wait_for_rate_limit("upvoters", self.rate_limit)
         
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"https://huggingface.co/api/collections/{collection_id}/upvoters"
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        upvoters = await response.json()
-                        return [upvoter['user'] for upvoter in upvoters]
-                    return []
+            url = f"https://huggingface.co/api/collections/{collection_id}/upvoters"
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    upvoters = await response.json()
+                    return [upvoter['user'] for upvoter in upvoters]
+                return []
         except Exception as e:
             self.logger.error(f"Error fetching upvoters for {collection_id}: {str(e)}")
             return [] 

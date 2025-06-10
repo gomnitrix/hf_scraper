@@ -31,7 +31,11 @@ def cli():
               type=int,
               help='Maximum number of items to scrape')
 @click.option('--tags', '-g',
+              type=str,
               help='Comma-separated list of tags to filter by')
+@click.option('--resource-ids', 
+              type=click.Path(exists=True, file_okay=True, dir_okay=False),
+              help='Path to a file containing resource IDs (one per line or comma-separated)')
 @click.option('--rate-limit', '-r',
               type=int,
               default=10,
@@ -51,6 +55,7 @@ def scrape(type: str,
          subtype: str,
          limit: Optional[int], 
          tags: Optional[str], 
+         resource_ids: Optional[str],
          rate_limit: int,
          batch_size: int,
          min_upvotes: int,
@@ -62,6 +67,16 @@ def scrape(type: str,
     
     tag_list = tags.split(',') if tags else None
     
+    resource_id_list = None
+    if resource_ids:
+        with open(resource_ids, 'r') as f:
+            content = f.read().strip()
+            # Handle both comma-separated and newline-separated formats
+            if ',' in content:
+                resource_id_list = [id.strip() for id in content.split(',') if id.strip()]
+            else:
+                resource_id_list = [id.strip() for id in content.splitlines() if id.strip()]
+    
     async def run_scrapers():
         scraper = None
         if type == 'model':
@@ -70,6 +85,7 @@ def scrape(type: str,
                 redis_uri=redis_uri,
                 limit=limit,
                 tags=tag_list,
+                resource_ids=resource_id_list,
                 rate_limit=rate_limit,
                 batch_size=batch_size
             )
@@ -80,6 +96,7 @@ def scrape(type: str,
                 redis_uri=redis_uri,
                 limit=limit,
                 tags=tag_list,
+                resource_ids=resource_id_list,
                 rate_limit=rate_limit,
                 batch_size=batch_size
             )

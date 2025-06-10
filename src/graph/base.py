@@ -177,10 +177,17 @@ class RelationshipHandler:
             item_type = item.get("item_type")
             if item_type not in ["model", "dataset"]:
                 continue
+            
+            # filter out models that are not in the database (or we can upsert them)
             if item_type == "model":
-                await self.dgraph_client.upsert_model({"name": item_id})
+                # await self.dgraph_client.upsert_model({"name": item_id})
+                item_uid = await self.dgraph_client._get_node_uid("Model", item_id)
             else:
-                await self.dgraph_client.upsert_dataset({"name": item_id})
+                # await self.dgraph_client.upsert_dataset({"name": item_id})
+                item_uid = await self.dgraph_client._get_node_uid("Dataset", item_id)
+            if not item_uid:
+                continue
+            
             relationships.append({
                 "from_name": collection_name,
                 "from_type": "Collection",

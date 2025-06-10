@@ -1,7 +1,7 @@
 .DS_Store
 .vscode
 .cursor
-test.ipynb
+*.ipynb
 .pytest_cache
 .ruff_cache
 .mypy_cache
@@ -9,3 +9,4 @@ test.ipynb
 .coverage.*
 .coverage.*.*
 .coverage.*.*.*
+data/

@@ -86,13 +86,12 @@ class OrganizationScraper(BaseScraper):
         await self.redis_client.wait_for_rate_limit("followers", self.rate_limit)
         
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"https://huggingface.co/api/organizations/{org_id}/followers"
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        followers = await response.json()
-                        return [follower['user'] for follower in followers]
-                    return []
+            url = f"https://huggingface.co/api/organizations/{org_id}/followers"
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    followers = await response.json()
+                    return [follower['user'] for follower in followers]
+                return []
         except Exception as e:
             self.logger.error(f"Error fetching followers for {org_id}: {str(e)}")
             return []

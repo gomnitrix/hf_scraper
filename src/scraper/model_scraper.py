@@ -1,7 +1,6 @@
-from typing import List, Dict, Any, Iterable
+from typing import List, Dict, Any, AsyncIterable
 from .base_scraper import BaseScraper
 from huggingface_hub import ModelInfo, ModelCard
-import aiohttp
 from datetime import datetime
 import asyncio
 
@@ -20,6 +19,22 @@ class ModelScraper(BaseScraper):
         'uk', 'ur', 'uz', 'vi', 'xh', 'yi', 'yo', 'zh', 'zu',
         'base_model:', 'license:', 'region:', 'language:', 'dataset:'
     }
+
+    EXPANDED_FIELDS = [
+        "author",
+        "cardData",
+        "createdAt",
+        "disabled",
+        "downloads",
+        "downloadsAllTime",
+        "inference",
+        "lastModified",
+        "library_name",
+        "likes",
+        "pipeline_tag",
+        "private",
+        "tags"
+    ]
 
     @property
     def item_type(self) -> str:
@@ -77,28 +92,49 @@ class ModelScraper(BaseScraper):
             },
         }
 
-    async def list_items(self) -> Iterable[ModelInfo]:
+    async def list_items(self) -> AsyncIterable[ModelInfo]:
         """List all available models."""
-        model_iterator = self.api.list_models(
+        if self.resource_ids:
+            # Create an async generator for each resource ID
+            async def search_generator():
+                for model_id in self.resource_ids:
+                    async for model in self._search_models(model_id):
+                        yield model
+            
+            model_iterator = search_generator()
+        else:
+            # Use list all models if no resource IDs specified
+            model_iterator = self._list_all_models()
+
+        # Apply tags filtering only if tags are specified
+        if self.tags:
+            async for model in model_iterator:
+                if any(x in set(model.tags) for x in self.tags):
+                    yield model
+        else:
+            # Return all models if no tags specified
+            async for model in model_iterator:
+                yield model
+
+    async def _list_all_models(self) -> AsyncIterable[ModelInfo]:
+        """List all models with lazy loading."""
+        models = self.api.list_models(
             limit=self.limit,
-            expand=[
-                "author",
-                "cardData",
-                "createdAt",
-                "disabled",
-                "downloads",
-                "downloadsAllTime",
-                "inference",
-                "lastModified",
-                "library_name",
-                "likes",
-                "pipeline_tag",
-                "private",
-                "tags"
-            ]
+            expand=self.EXPANDED_FIELDS
         )
-        for model in model_iterator:
-            if any(x in set(model.tags) for x in self.tags):
+        for model in models:
+            yield model
+    
+    async def _search_models(self, model_id: str) -> AsyncIterable[ModelInfo]:
+        """Search models by ID with lazy loading."""
+        await self.redis_client.wait_for_rate_limit("search_models", self.rate_limit)
+
+        models = self.api.list_models(
+            search=model_id,
+            expand=self.EXPANDED_FIELDS
+        )
+        for model in models:
+            if model.id == model_id:
                 yield model
     
     async def fetch_extended_metadata(self, item_id: str) -> Dict[str, Any]:
@@ -136,15 +172,16 @@ class ModelScraper(BaseScraper):
     async def _fetch_likers(self, item_id: str) -> List[str]:
         """Fetch likers for an item using HTTP API and return a list of usernames."""
         await self.redis_client.wait_for_rate_limit("likers", self.rate_limit)
-        
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"https://huggingface.co/api/{self.item_type}/{item_id}/likers"
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        likers = await response.json()
-                        return [liker['user'] for liker in likers]
-                    return []
+            url = f"https://huggingface.co/api/{self.item_type}/{item_id}/likers"
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    likers = await response.json()
+                    return [liker['user'] for liker in likers]
+                return []
+        except asyncio.TimeoutError:
+            self.logger.error(f"Timeout fetching likers for model: {item_id}")
+            return []
         except Exception as e:
             self.logger.error(f"Error fetching likers for {item_id}: {str(e)}")
             return []
@@ -152,7 +189,6 @@ class ModelScraper(BaseScraper):
     async def _fetch_contributors(self, item_id: str) -> List[str]:
         """Fetch contributors for an item using HTTP API and return a list of usernames."""
         await self.redis_client.wait_for_rate_limit("contributors", self.rate_limit)
-        
         try:
             unique_contributors = list(dict.fromkeys(
                 author

@@ -1,7 +1,6 @@
-from typing import List, Dict, Any, Iterable
+from typing import List, Dict, Any, AsyncIterable
 from .base_scraper import BaseScraper
-from huggingface_hub import DatasetInfo
-import aiohttp
+from huggingface_hub import DatasetInfo, ModelCard
 from datetime import datetime
 import asyncio
 
@@ -21,6 +20,19 @@ class DatasetScraper(BaseScraper):
         'language:',
         'region:'
     }
+
+    EXPANDED_FIELDS = [
+        "author",
+        "cardData", 
+        "createdAt", 
+        "disabled", 
+        "downloads", 
+        "downloadsAllTime", 
+        "lastModified", 
+        "likes", 
+        "private", 
+        "tags"
+    ]
 
     @property
     def item_type(self) -> str:
@@ -77,19 +89,49 @@ class DatasetScraper(BaseScraper):
         }
     
 
-    async def list_items(self) -> Iterable[DatasetInfo]:
+    async def list_items(self) -> AsyncIterable[DatasetInfo]:
         """List all available datasets."""
-        dataset_iterator = self.api.list_datasets(
+        if self.resource_ids:
+            # Create an async generator for each resource ID
+            async def search_generator():
+                for dataset_id in self.resource_ids:
+                    async for dataset in self._search_datasets(dataset_id):
+                        yield dataset
+            
+            dataset_iterator = search_generator()
+        else:
+            # Use list all datasets if no resource IDs specified
+            dataset_iterator = self._list_all_datasets()
+
+        # Apply tags filtering only if tags are specified
+        if self.tags:
+            async for dataset in dataset_iterator:
+                if any(x in set(dataset.tags) for x in self.tags):
+                    yield dataset
+        else:
+            # Return all datasets if no tags specified
+            async for dataset in dataset_iterator:
+                yield dataset
+
+    async def _list_all_datasets(self) -> AsyncIterable[DatasetInfo]:
+        """List all datasets with lazy loading."""
+        datasets = self.api.list_datasets(
             limit=self.limit,
-            expand=[
-                "author", "cardData", "createdAt", "disabled", 
-                "downloads", "downloadsAllTime", "lastModified", 
-                "likes", "private", "tags"
-            ]
+            expand=self.EXPANDED_FIELDS
         )
-        
-        for dataset in dataset_iterator:
-            if any(x in set(dataset.tags) for x in self.tags):
+        for dataset in datasets:
+            yield dataset
+    
+    async def _search_datasets(self, dataset_id: str) -> AsyncIterable[DatasetInfo]:
+        """Search datasets by ID with lazy loading."""
+        await self.redis_client.wait_for_rate_limit("search_datasets", self.rate_limit)
+
+        datasets = self.api.list_datasets(
+            search=dataset_id,
+            expand=self.EXPANDED_FIELDS
+        )
+        for dataset in datasets:
+            if dataset.id == dataset_id:
                 yield dataset
 
     async def fetch_extended_metadata(self, item_id: str) -> Dict[str, Any]:
@@ -129,13 +171,15 @@ class DatasetScraper(BaseScraper):
         await self.redis_client.wait_for_rate_limit("likers", self.rate_limit)
         
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"https://huggingface.co/api/{self.item_type}/{item_id}/likers"
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        likers = await response.json()
-                        return [liker['user'] for liker in likers]
-                    return []
+            url = f"https://huggingface.co/api/{self.item_type}/{item_id}/likers"
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    likers = await response.json()
+                    return [liker['user'] for liker in likers]
+                return []
+        except asyncio.TimeoutError:
+            self.logger.error(f"Timeout fetching likers for dataset: {item_id}")
+            return []
         except Exception as e:
             self.logger.error(f"Error fetching likers for {item_id}: {str(e)}")
             return []
