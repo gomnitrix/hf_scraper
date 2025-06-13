@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from .base import BaseMigrator, RelationshipHandler
 from utils.dgraph_client import DgraphClient
 from utils.mongodb import MongoDBClient
+from utils.parse_util import safe_int_parse
 
 class ModelMigrator(BaseMigrator):
     """Handles model migration."""
@@ -15,20 +16,15 @@ class ModelMigrator(BaseMigrator):
         if not isinstance(downloads, dict):
             downloads = {}
         
-        current_downloads = downloads.get("current", 0)
-        all_time_downloads = downloads.get("all_time", 0)
-        
-        if not isinstance(current_downloads, (int, float)):
-            current_downloads = 0
-        if not isinstance(all_time_downloads, (int, float)):
-            all_time_downloads = 0
+        current_downloads = safe_int_parse(downloads.get("current"))
+        all_time_downloads = safe_int_parse(downloads.get("all_time"))
 
         return {
             "name": basic_metadata.get("id", ""),
             "created_at": basic_metadata.get("created_at", ""),
             "last_modified": basic_metadata.get("last_modified", ""),
             "downloads": str(max(current_downloads, all_time_downloads)),
-            "likes": str(basic_metadata.get("likes", 0)),
+            "likes": str(safe_int_parse(basic_metadata.get("likes"))),
             "base_model_relation": card_data.get("base_model_relation", "")
         }
 
@@ -41,12 +37,15 @@ class ModelMigrator(BaseMigrator):
             try:
                 basic_metadata = await self._extract_basic_metadata(doc)
                 extended_metadata = await self._extract_extended_metadata(doc)
-                card_data = basic_metadata.get("card_data", {})
-                status = basic_metadata.get("status", {})
-                author = basic_metadata.get("author", "")
-                tags = basic_metadata.get("tags", [])
+                card_data = basic_metadata.get("card_data") or {}
+                status = basic_metadata.get("status") or {}
+                author = basic_metadata.get("author") or ""
+                tags = basic_metadata.get("tags") or []
 
                 if await self._should_skip(status):
+                    continue
+                    
+                if safe_int_parse(basic_metadata.get("likes")) < 5:
                     continue
 
                 # Prepare and upsert model data
@@ -97,6 +96,8 @@ class ModelMigrator(BaseMigrator):
 
                 # Handle datasets
                 if card_data.get("datasets"):
+                    if isinstance(card_data["datasets"], str):
+                        card_data["datasets"] = [card_data["datasets"]]
                     dataset_rels = await self.relationship_handler.handle_trained_on(
                         model_data["name"],
                         card_data["datasets"]

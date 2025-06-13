@@ -40,7 +40,7 @@ class GraphMigrator:
                 allUsers as uid
             }}
 
-            filteredUsers(func: uid(allUsers), first: {page_size}) @filter(lt(val(totalInteraction), 5) AND eq(val(totalRelation), 0)) {{
+            filteredUsers(func: uid(allUsers), first: {page_size}) @filter(lt(val(totalInteraction), 10) AND eq(val(totalRelation), 0)) {{
                 uid
                 name
                 totalInteraction: val(totalInteraction)

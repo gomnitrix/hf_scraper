@@ -100,7 +100,7 @@ class CollectionScraper(BaseScraper):
                 collections = self.api.list_collections(
                     item=item_id,
                     sort="upvotes",
-                    limit=10
+                    limit=self.limit
                 )
                 
                 for collection in collections:

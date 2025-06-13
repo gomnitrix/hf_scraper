@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Tuple
 from .base import BaseMigrator, RelationshipHandler
 from utils.dgraph_client import DgraphClient
 from utils.mongodb import MongoDBClient
+from utils.parse_util import safe_int_parse
 
 class DatasetMigrator(BaseMigrator):
     """Handles dataset migration."""
@@ -15,19 +16,15 @@ class DatasetMigrator(BaseMigrator):
         if not isinstance(downloads, dict):
             downloads = {}
         
-        current_downloads = downloads.get("current", 0)
-        all_time_downloads = downloads.get("all_time", 0)
+        current_downloads = safe_int_parse(downloads.get("current"))
+        all_time_downloads = safe_int_parse(downloads.get("all_time"))
         
-        if not isinstance(current_downloads, (int, float)):
-            current_downloads = 0
-        if not isinstance(all_time_downloads, (int, float)):
-            all_time_downloads = 0
         return {
             "name": basic_metadata.get("id", ""),
             "created_at": basic_metadata.get("created_at", ""),
             "last_modified": basic_metadata.get("last_modified", ""),
             "downloads": str(max(current_downloads, all_time_downloads)),
-            "likes": str(basic_metadata.get("likes", 0))
+            "likes": str(safe_int_parse(basic_metadata.get("likes")))
         }
 
     async def _process_tags(self, tags: List[str]) -> Tuple[List[str], List[str], List[str], List[str]]:
@@ -58,15 +55,15 @@ class DatasetMigrator(BaseMigrator):
             try:
                 basic_metadata = await self._extract_basic_metadata(doc)
                 extended_metadata = await self._extract_extended_metadata(doc)
-                status = basic_metadata.get("status", {})
-                author = basic_metadata.get("author", "")
+                status = basic_metadata.get("status") or {}
+                author = basic_metadata.get("author") or ""
 
                 if await self._should_skip(status):
                     continue
 
                 # Process tags
                 filtered_tags, libraries, licenses, arxiv_ids = await self._process_tags(
-                    basic_metadata.get("tags", [])
+                    basic_metadata.get("tags") or []
                 )
 
                 # Prepare and upsert dataset data

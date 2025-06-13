@@ -3,6 +3,7 @@ from datetime import datetime
 from .base import BaseMigrator, RelationshipHandler
 from utils.dgraph_client import DgraphClient
 from utils.mongodb import MongoDBClient
+from utils.parse_util import safe_int_parse
 
 class OrganizationMigrator(BaseMigrator):
     """Handles organization migration."""
@@ -15,7 +16,7 @@ class OrganizationMigrator(BaseMigrator):
         """Prepare organization data for upsert."""
         return {
             "name": doc["_id"],
-            "followers": str(extended_metadata.get("followers_count", 0)),
+            "followers": str(safe_int_parse(extended_metadata.get("followers_count"))),
             "last_modified": basic_metadata.get("last_updated", datetime.now().isoformat())
         }
 

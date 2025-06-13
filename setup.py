@@ -15,7 +15,11 @@ setup(
         "redis",
         "aioredis",
         "motor",
-        "pydgraph"
+        "pydgraph",
+        "numpy",
+        "pandas",
+        "matplotlib",
+        "seaborn",
     ],
     entry_points={
         'console_scripts': [

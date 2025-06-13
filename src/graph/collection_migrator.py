@@ -1,8 +1,9 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 from datetime import datetime
 from .base import BaseMigrator, RelationshipHandler
 from utils.dgraph_client import DgraphClient
 from utils.mongodb import MongoDBClient
+from utils.parse_util import safe_int_parse
 
 class CollectionMigrator(BaseMigrator):
     """Handles collection migration."""
@@ -15,9 +16,9 @@ class CollectionMigrator(BaseMigrator):
         return {
             "id": basic_metadata.get("id", ""),
             "name": basic_metadata.get("title", ""),
-            "description": basic_metadata.get("description", ""),
+            # "description": escape_special_chars(basic_metadata.get("description", "")),
             "last_modified": basic_metadata.get("last_updated", datetime.now().isoformat()),
-            "upvotes": str(basic_metadata.get("upvotes", 0))
+            "upvotes": str(safe_int_parse(basic_metadata.get("upvotes")))
         }
 
     async def migrate(self) -> None:
@@ -29,7 +30,7 @@ class CollectionMigrator(BaseMigrator):
             try:
                 basic_metadata = await self._extract_basic_metadata(doc)
                 extended_metadata = await self._extract_extended_metadata(doc)
-                owner = basic_metadata.get("owner", "")
+                owner = basic_metadata.get("owner") or ""
 
                 # Prepare and upsert collection data
                 collection_data = await self._prepare_collection_data(basic_metadata)
